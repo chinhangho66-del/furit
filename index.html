@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>水果配對大挑戰</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --highlight-color: #ffffff;
+            --apple: #ff4d4d;
+            --banana: #ffff66;
+            --grape: #71f171;
+            --orange: #ffa500;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: white;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* 介面佈局 */
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #upper-panel {
+            flex: 1;
+            border-bottom: 2px solid #333;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        #lower-panel {
+            flex: 1;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 20px;
+        }
+
+        /* 水果樣式 */
+        .fruit-item {
+            width: 120px;
+            height: 120px;
+            cursor: pointer;
+            transition: transform 0.2s, border 0.3s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 80px;
+            border-radius: 20px;
+            border: 4px solid transparent;
+        }
+
+        .scanning-active {
+            border: 8px solid white !important;
+            transform: scale(1.2);
+            box-shadow: 0 0 20px #fff;
+        }
+
+        .target-box {
+            width: 150px;
+            height: 150px;
+            border: 4px dashed #666;
+            border-radius: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 100px;
+        }
+
+        /* 設定按鈕 */
+        #settings-btn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 30px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        .hidden { visibility: hidden; }
+        .dashed-outline { opacity: 0.3; border: 4px dashed white; }
+
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <button id="settings-btn" onclick="toggleSettings()">⚙️</button>
+    
+    <div id="upper-panel">
+        <h2 id="level-indicator">Level 1</h2>
+        <div id="target-area" class="target-box"></div>
+        <p id="instruction-text">請找出...</p>
+    </div>
+
+    <div id="lower-panel">
+        </div>
+</div>
+
+<script>
+    const fruits = [
+        { id: 'apple', name: '蘋果', icon: '🍎', color: 'red' },
+        { id: 'banana', name: '香蕉', icon: '🍌', color: 'yellow' },
+        { id: 'grape', name: '提子', icon: '🍇', color: 'green' },
+        { id: 'orange', name: '橙', icon: '🍊', color: 'orange' }
+    ];
+
+    let currentLevel = 1;
+    let correctInLevel = 0;
+    let targetFruit = null;
+    let mode = 'click'; // click, drag, scan
+    let scanIndex = 0;
+    let scanInterval = null;
+
+    // 初始化語音
+    const synth = window.speechSynthesis;
+    function speak(text) {
+        if (synth.speaking) synth.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'zh-HK';
+        synth.speak(utter);
+    }
+
+    // 隨機排列
+    function shuffle(array) {
+        return array.sort(() => Math.random() - 0.5);
+    }
+
+    function initGame() {
+        targetFruit = fruits[Math.floor(Math.random() * fruits.length)];
+        correctInLevel = 0;
+        setupLevel();
+    }
+
+    function setupLevel() {
+        document.getElementById('level-indicator').innerText = `Level ${currentLevel}`;
+        const targetArea = document.getElementById('target-area');
+        targetArea.innerHTML = targetFruit.icon;
+        targetArea.classList.remove('dashed-outline', 'hidden');
+
+        // Level 特殊處理
+        if (currentLevel === 3) {
+            setTimeout(() => {
+                targetArea.classList.add('dashed-outline');
+            }, 3000);
+        } else if (currentLevel === 4) {
+            setTimeout(() => {
+                targetArea.classList.add('hidden');
+            }, 3000);
+        }
+
+        speak(`請選出${targetFruit.name}`);
+        renderOptions();
+    }
+
+    function renderOptions() {
+        const lowerPanel = document.getElementById('lower-panel');
+        lowerPanel.innerHTML = '';
+        const shuffledFruits = shuffle([...fruits]);
+
+        shuffledFruits.forEach(fruit => {
+            const div = document.createElement('div');
+            div.className = 'fruit-item';
+            div.innerHTML = fruit.icon;
+            div.onclick = () => handleSelection(fruit);
+            lowerPanel.appendChild(div);
+        });
+    }
+
+    function handleSelection(selected) {
+        speak(selected.name);
+        
+        if (selected.id === targetFruit.id) {
+            // 正確
+            playAudio('correct');
+            correctInLevel++;
+            if (correctInLevel >= 2) {
+                currentLevel++;
+                correctInLevel = 0;
+            }
+            setTimeout(() => {
+                targetFruit = fruits[Math.floor(Math.random() * fruits.length)];
+                setupLevel();
+            }, 1500);
+        } else {
+            // 錯誤
+            playAudio('error');
+            if (currentLevel === 4) {
+                // Level 4 錯誤重新提示
+                const targetArea = document.getElementById('target-area');
+                targetArea.classList.remove('hidden');
+                speak(`唔緊要，再試一次，目標係${targetFruit.name}`);
+                setTimeout(() => targetArea.classList.add('hidden'), 2000);
+            }
+        }
+    }
+
+    function playAudio(type) {
+        // 這裡可以使用 Audio Context 產生簡單頻率聲效，或加載本地 mp3
+        console.log(`播放聲效: ${type}`);
+    }
+
+    function toggleSettings() {
+        const newMode = prompt("選擇模式: 1.點擊 2.掃描 (輸入數字)");
+        if (newMode === '2') startScanning();
+        else stopScanning();
+    }
+
+    // 啟動掃描模式
+    function startScanning() {
+        stopScanning();
+        const items = document.getElementsByClassName('fruit-item');
+        scanInterval = setInterval(() => {
+            Array.from(items).forEach(i => i.classList.remove('scanning-active'));
+            items[scanIndex].classList.add('scanning-active');
+            speak(fruits.find(f => f.icon === items[scanIndex].innerHTML).name);
+            scanIndex = (scanIndex + 1) % items.length;
+        }, 3000);
+    }
+
+    function stopScanning() {
+        clearInterval(scanInterval);
+    }
+
+    // 啟動遊戲
+    window.onload = initGame;
+
+</script>
+</body>
+</html>
